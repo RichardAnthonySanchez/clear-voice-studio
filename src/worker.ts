@@ -65,9 +65,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
             const transcriber = await PipelineSingleton.getInstance();
 
             const output = await transcriber(audio, {
-                language: language || 'english',
-                chunk_length_s: 30,
-                stride_length_s: 5,
+                // language: 'english', // Not needed for en-only model
                 task: 'transcribe',
                 return_timestamps: true,
             });

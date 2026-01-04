@@ -124,23 +124,24 @@ export function useTranscribe(): TranscribeHook {
 
         const rms = Math.sqrt(sumSquared / audioData.length);
 
-        const targetLevel = 0.9;
+        const targetLevel = 0.95;
         let gain = 1.0;
 
-        if (peak > 0 && peak < targetLevel) {
-            gain = targetLevel / peak;
-            addLog(`Normalizing: Peak=${peak.toFixed(4)}, RMS=${rms.toFixed(4)} -> Gain=${gain.toFixed(2)}x`);
-
-            // Apply gain
-            const normalized = new Float32Array(audioData.length);
-            for (let i = 0; i < audioData.length; i++) {
-                normalized[i] = audioData[i] * gain;
-            }
-            return { normalizedData: normalized, peak, gain };
+        // Verify we have valid data
+        if (!Number.isFinite(peak) || peak === 0) {
+            addLog('Audio peak is zero or invalid.', 'error');
+            return { normalizedData: audioData, peak, gain };
         }
 
-        addLog(`Audio stats: Peak=${peak.toFixed(4)}, RMS=${rms.toFixed(4)} (No normalization needed)`);
-        return { normalizedData: audioData, peak, gain };
+        gain = targetLevel / peak;
+        addLog(`Normalizing: Peak=${peak.toFixed(4)}, RMS=${rms.toFixed(4)} -> Gain=${gain.toFixed(2)}x`);
+
+        // Apply gain
+        const normalized = new Float32Array(audioData.length);
+        for (let i = 0; i < audioData.length; i++) {
+            normalized[i] = audioData[i] * gain;
+        }
+        return { normalizedData: normalized, peak, gain };
     };
 
     const processAudio = useCallback(async (blob: Blob) => {
