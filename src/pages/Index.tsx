@@ -1,13 +1,17 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { DictationProcessor } from '@/components/DictationProcessor';
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <main className="min-h-screen relative overflow-hidden">
+      {/* Background gradient orbs */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl -translate-y-1/2" />
+      <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-primary/5 rounded-full blur-3xl translate-y-1/2" />
+      
+      {/* Content */}
+      <div className="relative z-10 container mx-auto px-4 py-12 md:py-16">
+        <DictationProcessor />
       </div>
-    </div>
+    </main>
   );
 };
 
