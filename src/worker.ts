@@ -49,7 +49,19 @@ self.addEventListener('message', async (event: MessageEvent) => {
         }
 
         try {
-            console.log('[Worker] Starting transcription via pipeline...');
+            console.log(`[Worker] Starting transcription via pipeline... Audio length: ${audio.length}`);
+
+            // Log audio stats to ensure it's not silent
+            let max = 0;
+            let sum = 0;
+            for (let i = 0; i < audio.length; i++) {
+                const val = Math.abs(audio[i]);
+                if (val > max) max = val;
+                sum += val;
+            }
+            const avg = sum / audio.length;
+            console.log(`[Worker] Audio Input Stats: Max=${max.toFixed(4)}, Avg=${avg.toFixed(6)}`);
+
             const transcriber = await PipelineSingleton.getInstance();
 
             const output = await transcriber(audio, {

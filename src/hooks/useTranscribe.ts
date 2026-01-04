@@ -50,7 +50,9 @@ export function useTranscribe(): TranscribeHook {
     const chunksRef = useRef<Blob[]>([]);
 
     const addLog = useCallback((message: string, type: DebugLog['type'] = 'info', data?: any) => {
-        setLogs(prev => [...prev, { timestamp: Date.now(), message, type, data }].slice(-50)); // Keep last 50
+        const timestamp = Date.now();
+        console.log(`[${type.toUpperCase()}] ${message}`, data || '');
+        setLogs(prev => [...prev, { timestamp, message, type, data }].slice(-50));
     }, []);
 
     // Initialize Worker
@@ -112,17 +114,22 @@ export function useTranscribe(): TranscribeHook {
 
     const normalizeAudio = (audioData: Float32Array): { normalizedData: Float32Array; peak: number; gain: number } => {
         let peak = 0;
+        let sumSquared = 0;
+
         for (let i = 0; i < audioData.length; i++) {
             const abs = Math.abs(audioData[i]);
             if (abs > peak) peak = abs;
+            sumSquared += audioData[i] * audioData[i];
         }
+
+        const rms = Math.sqrt(sumSquared / audioData.length);
 
         const targetLevel = 0.9;
         let gain = 1.0;
 
         if (peak > 0 && peak < targetLevel) {
             gain = targetLevel / peak;
-            addLog(`Normalizing audio: Peak ${peak.toFixed(4)} -> Gain ${gain.toFixed(2)}x`, 'info');
+            addLog(`Normalizing: Peak=${peak.toFixed(4)}, RMS=${rms.toFixed(4)} -> Gain=${gain.toFixed(2)}x`);
 
             // Apply gain
             const normalized = new Float32Array(audioData.length);
@@ -132,6 +139,7 @@ export function useTranscribe(): TranscribeHook {
             return { normalizedData: normalized, peak, gain };
         }
 
+        addLog(`Audio stats: Peak=${peak.toFixed(4)}, RMS=${rms.toFixed(4)} (No normalization needed)`);
         return { normalizedData: audioData, peak, gain };
     };
 
@@ -141,13 +149,21 @@ export function useTranscribe(): TranscribeHook {
             return;
         }
 
-        addLog(`Processing audio blob: ${blob.size} bytes, type: ${blob.type}`, 'info');
+        addLog(`Processing blob: ${blob.size} bytes, ${blob.type}`);
         setIsTranscribing(true);
 
         try {
+            // Force 16kHz sample rate for Whisper
             const audioContext = new AudioContext({ sampleRate: 16000 });
             const arrayBuffer = await blob.arrayBuffer();
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            addLog(`Decoded: ${audioBuffer.duration.toFixed(2)}s @ ${audioBuffer.sampleRate}Hz, ${audioBuffer.numberOfChannels}ch`);
+
+            if (audioBuffer.sampleRate !== 16000) {
+                addLog(`Warning: Sample rate is ${audioBuffer.sampleRate}Hz, expected 16000Hz. This might fail.`, 'error');
+            }
+
             const rawData = audioBuffer.getChannelData(0);
 
             // Update stats
