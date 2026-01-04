@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Eraser, Zap, StopCircle } from 'lucide-react';
+import { Eraser, Zap } from 'lucide-react';
 import { DictationInput } from './DictationInput';
 import { OutputDisplay } from './OutputDisplay';
 import { ModelStatus } from './ModelStatus';
+import { AudioVisualizer } from './AudioVisualizer';
+import { DebugPanel } from './DebugPanel';
 import { useTranscribe } from '@/hooks/useTranscribe';
 import { applyCorrections, type CorrectionResult } from '@/lib/correctionEngine';
 
@@ -19,6 +21,9 @@ export function DictationProcessor() {
     isRecording,
     isTranscribing,
     transcription,
+    logs,
+    audioStats,
+    audioStream,
     startRecording,
     stopRecording,
     resetTranscription
@@ -85,9 +90,14 @@ export function DictationProcessor() {
       </div>
 
       {/* Input Section */}
-      <div className="space-y-3">
-        <div className="flex justify-between items-center pl-1">
+      <div className="space-y-3 relative">
+        <div className="flex justify-between items-center pl-1 h-6">
           <label className="text-sm font-medium text-foreground/80">Raw Dictation</label>
+          {isRecording && (
+            <div className="absolute right-0 top-0 flex items-center">
+              <AudioVisualizer stream={audioStream} isRecording={isRecording} width={100} height={30} />
+            </div>
+          )}
           {isTranscribing && (
             <span className="text-xs text-primary animate-pulse">Transcribing...</span>
           )}
@@ -127,6 +137,13 @@ export function DictationProcessor() {
         <label className="text-sm font-medium text-foreground/80 pl-1">Refined Output</label>
         <OutputDisplay result={result} isProcessing={isProcessing} />
       </div>
+
+      {/* Debug Panel */}
+      <DebugPanel
+        logs={logs}
+        audioStats={audioStats}
+        modelState={{ isLoading: isModelLoading, isLoaded: isModelLoaded, isTranscribing }}
+      />
 
       {/* Info Footer */}
       <div className="text-center pt-4">
