@@ -1,73 +1,82 @@
-# Welcome to your Lovable project
+# Clear Voice Studio
 
-## Project info
+**Clear Voice Studio** (internally "VoiceRefine") is a powerful, privacy-first web application for recording, transcribing, and refining voice dictation. 
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Unlike traditional cloud-based transcription services, Clear Voice Studio runs a state-of-the-art machine learning model (**Whisper**) entirely inside your browser. This means **your voice data never leaves your device**.
 
-## How can I edit this code?
+![Clear Voice Studio Preview](public/preview.png)
 
-There are several ways of editing your application.
+## 🌟 Features
 
-**Use Lovable**
+- **Private & Secure**: 0% data egress. Everything runs locally via WebAssembly.
+- **Real-Time Transcription**: Uses `Xenova/whisper-tiny.en` for fast, accurate speech-to-text.
+- **Smart Refinement**: Automatically cleans up filler words, fixes casing, and organizes unstructured speech into readable text.
+- **Audio Visualization**: Visual confirmation that your microphone is working.
+- **Debug Instrumentation**: Built-in panels to analyze audio levels, model status, and performance stats.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## 🏗️ Architecture
 
-Changes made via Lovable will be committed automatically to this repo.
+For a detailed breakdown of how the application works, including component diagrams and data flow, please check out our [Architecture Documentation](docs/architecture.md).
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```mermaid
+graph LR
+    User -->|Voice| App[Clear Voice Studio]
+    subgraph "Browser (Local)"
+        App -->|Analyze| Model[Whisper ML Model]
+        Model -->|Transcribe| Text
+        Text -->|Refine| PolishedOutput
+    end
+    PolishedOutput -->|Display| User
 ```
 
-**Edit a file directly in GitHub**
+## 🚀 Getting Started
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Prerequisites
+- Node.js (v18 or higher recommended)
+- npm
 
-**Use GitHub Codespaces**
+### Installation
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/RichardAnthonySanchez/clear-voice-studio.git
+    cd clear-voice-studio
+    ```
 
-## What technologies are used for this project?
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
 
-This project is built with:
+3.  Start the development server:
+    ```bash
+    npm run dev
+    ```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+4.  Open your browser to the local URL provided (usually `http://localhost:5173`).
 
-## How can I deploy this project?
+## 🤝 Contributing
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+We welcome contributions to make Clear Voice Studio even better! Here's how you can help:
 
-## Can I connect a custom domain to my Lovable project?
+### Who is this for?
+- **Journalists & Writers**: Draft articles simply by speaking.
+- **Developers**: Learn how to implement client-side ML models.
+- **Privacy Advocates**: Use speech-to-text without sending audio to Big Tech.
 
-Yes, you can!
+### How to Contribute
+1.  **Fork** the repository.
+2.  **Create a branch** for your feature (`git checkout -b feature/amazing-feature`).
+3.  **Commit** your changes.
+4.  **Push** to the branch.
+5.  Open a **Pull Request**.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Areas for Improvement
+- Support for larger/multilingual Whisper models.
+- Improved text refinement rules.
+- Export functionality (Markdown, PDF).
+- PWA support for offline usage.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 📄 License
+
+This project is licensed under the MIT License.
