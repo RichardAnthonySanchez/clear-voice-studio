@@ -39,7 +39,7 @@ const SENTENCE_STARTERS = [
 ];
 
 // Apply rule-based corrections
-export function applyCorrections(text: string, similarities: number[] = []): CorrectionResult {
+export function applyCorrections(text: string): CorrectionResult {
   const changes: Change[] = [];
   let result = text;
   let position = 0;
@@ -144,7 +144,7 @@ function inferSentenceBoundaries(text: string, changes: Change[]): string {
     `([a-z])\\s+(${SENTENCE_STARTERS.join('|')})\\s+([a-z])`,
     'gi'
   );
-  
+
   // Only apply if sentence seems too long (heuristic: > 100 chars without punctuation)
   const segments = result.split(/[.!?]/);
   segments.forEach((segment, i) => {
@@ -166,13 +166,13 @@ function fixCommonArtifacts(text: string, changes: Change[]): string {
 
   // Fix "gonna" -> "going to"
   result = result.replace(/\bgonna\b/gi, 'going to');
-  
+
   // Fix "wanna" -> "want to"
   result = result.replace(/\bwanna\b/gi, 'want to');
-  
+
   // Fix "gotta" -> "got to"
   result = result.replace(/\bgotta\b/gi, 'got to');
-  
+
   // Fix repeated words
   result = result.replace(/\b(\w+)\s+\1\b/gi, '$1');
 
@@ -183,23 +183,7 @@ function fixCommonArtifacts(text: string, changes: Change[]): string {
   return result;
 }
 
-// Compute cosine similarity between two vectors
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
-  
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-  
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  return denominator === 0 ? 0 : dotProduct / denominator;
-}
+
 
 // Split text into sentences for processing
 export function splitIntoSentences(text: string): string[] {

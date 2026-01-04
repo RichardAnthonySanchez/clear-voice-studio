@@ -1,45 +1,64 @@
-import { useState, useCallback } from 'react';
-import { Eraser, Zap } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Eraser, Zap, StopCircle } from 'lucide-react';
 import { DictationInput } from './DictationInput';
 import { OutputDisplay } from './OutputDisplay';
 import { ModelStatus } from './ModelStatus';
-import { useEmbeddings } from '@/hooks/useEmbeddings';
-import { applyCorrections, splitIntoSentences, type CorrectionResult } from '@/lib/correctionEngine';
+import { useTranscribe } from '@/hooks/useTranscribe';
+import { applyCorrections, type CorrectionResult } from '@/lib/correctionEngine';
 
 export function DictationProcessor() {
   const [inputText, setInputText] = useState('');
   const [result, setResult] = useState<CorrectionResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  const { isLoading, isModelLoaded, loadingProgress, error, computeEmbeddings } = useEmbeddings();
 
-  const processText = useCallback(async () => {
-    if (!inputText.trim() || !isModelLoaded) return;
-    
+  const {
+    isModelLoading,
+    isModelLoaded,
+    progress: loadingProgress,
+    error: modelError,
+    isRecording,
+    isTranscribing,
+    transcription,
+    startRecording,
+    stopRecording,
+    resetTranscription
+  } = useTranscribe();
+
+  // Sync transcription to input text
+  useEffect(() => {
+    if (transcription) {
+      setInputText(transcription);
+    }
+  }, [transcription]);
+
+  const toggleRecording = useCallback(async () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
+  const processText = useCallback(() => {
+    if (!inputText.trim()) return;
+
     setIsProcessing(true);
-    
+
     try {
-      // Split into sentences for embedding computation
-      const sentences = splitIntoSentences(inputText);
-      
-      // Compute embeddings for semantic analysis
-      const embeddings = await computeEmbeddings(sentences);
-      
-      // Apply rule-based corrections with semantic awareness
-      const similarities = embeddings.map(e => e.embedding.length > 0 ? 1 : 0);
-      const correctionResult = applyCorrections(inputText, similarities);
-      
+      // Direct rule-based correction without embeddings
+      const correctionResult = applyCorrections(inputText);
       setResult(correctionResult);
     } catch (err) {
       console.error('Processing error:', err);
     } finally {
       setIsProcessing(false);
     }
-  }, [inputText, isModelLoaded, computeEmbeddings]);
+  }, [inputText]);
 
   const handleClear = () => {
     setInputText('');
     setResult(null);
+    resetTranscription();
   };
 
   return (
@@ -51,27 +70,34 @@ export function DictationProcessor() {
           <span className="text-primary text-glow">Refine</span>
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-lg mx-auto">
-          Transform raw dictation into polished, readable text using semantic analysis
+          Transform raw dictation into polished, readable text using Xenova Whisper & Rule-Based Logic
         </p>
       </div>
 
       {/* Model Status */}
       <div className="flex justify-center">
-        <ModelStatus 
-          isLoading={isLoading}
+        <ModelStatus
+          isLoading={isModelLoading || isTranscribing}
           isLoaded={isModelLoaded}
           progress={loadingProgress}
-          error={error}
+          error={modelError}
         />
       </div>
 
       {/* Input Section */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-foreground/80 pl-1">Raw Dictation</label>
+        <div className="flex justify-between items-center pl-1">
+          <label className="text-sm font-medium text-foreground/80">Raw Dictation</label>
+          {isTranscribing && (
+            <span className="text-xs text-primary animate-pulse">Transcribing...</span>
+          )}
+        </div>
         <DictationInput
           value={inputText}
           onChange={setInputText}
           disabled={isProcessing}
+          isRecording={isRecording}
+          onRecord={toggleRecording}
         />
       </div>
 
@@ -79,13 +105,13 @@ export function DictationProcessor() {
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <button
           onClick={processText}
-          disabled={!inputText.trim() || !isModelLoaded || isProcessing}
+          disabled={!inputText.trim() || isProcessing}
           className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-sm bg-gradient-to-r from-primary to-cyan-soft text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed btn-glow transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
           <Zap className="w-4 h-4" />
-          Process & Correct
+          Refine Text
         </button>
-        
+
         <button
           onClick={handleClear}
           disabled={!inputText && !result}
@@ -105,7 +131,7 @@ export function DictationProcessor() {
       {/* Info Footer */}
       <div className="text-center pt-4">
         <p className="text-xs text-muted-foreground/60">
-          Powered by all-MiniLM-L6-v2 • 100% browser-based • No data leaves your device
+          Powered by Xenova Whisper • 100% browser-based • No data leaves your device
         </p>
       </div>
     </div>
