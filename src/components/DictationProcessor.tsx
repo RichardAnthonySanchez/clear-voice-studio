@@ -1,17 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Eraser, Zap } from 'lucide-react';
 import { DictationInput } from './DictationInput';
-import { OutputDisplay } from './OutputDisplay';
 import { ModelStatus } from './ModelStatus';
 import { AudioVisualizer } from './AudioVisualizer';
 import { DebugPanel } from './DebugPanel';
 import { useTranscribe } from '@/hooks/useTranscribe';
-import { applyCorrections, type CorrectionResult } from '@/lib/correctionEngine';
 
 export function DictationProcessor() {
   const [inputText, setInputText] = useState('');
-  const [result, setResult] = useState<CorrectionResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+
 
   const {
     isModelLoading,
@@ -44,27 +40,7 @@ export function DictationProcessor() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  const processText = useCallback(() => {
-    if (!inputText.trim()) return;
 
-    setIsProcessing(true);
-
-    try {
-      // Direct rule-based correction without embeddings
-      const correctionResult = applyCorrections(inputText);
-      setResult(correctionResult);
-    } catch (err) {
-      console.error('Processing error:', err);
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [inputText]);
-
-  const handleClear = () => {
-    setInputText('');
-    setResult(null);
-    resetTranscription();
-  };
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -92,7 +68,7 @@ export function DictationProcessor() {
       {/* Input Section */}
       <div className="space-y-3 relative">
         <div className="flex justify-between items-center pl-1 h-6">
-          <label className="text-sm font-medium text-foreground/80">Raw Dictation</label>
+          <label className="text-sm font-medium text-foreground/80">Transcription</label>
           {isRecording && (
             <div className="absolute right-0 top-0 flex items-center">
               <AudioVisualizer stream={audioStream} isRecording={isRecording} width={100} height={30} />
@@ -105,38 +81,13 @@ export function DictationProcessor() {
         <DictationInput
           value={inputText}
           onChange={setInputText}
-          disabled={isProcessing}
+          disabled={false}
           isRecording={isRecording}
           onRecord={toggleRecording}
         />
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <button
-          onClick={processText}
-          disabled={!inputText.trim() || isProcessing}
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-sm bg-gradient-to-r from-primary to-cyan-soft text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed btn-glow transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Zap className="w-4 h-4" />
-          Refine Text
-        </button>
 
-        <button
-          onClick={handleClear}
-          disabled={!inputText && !result}
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium text-sm bg-navy-700/60 text-foreground/80 hover:text-foreground border border-border/50 hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        >
-          <Eraser className="w-4 h-4" />
-          Clear
-        </button>
-      </div>
-
-      {/* Output Section */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-foreground/80 pl-1">Refined Output</label>
-        <OutputDisplay result={result} isProcessing={isProcessing} />
-      </div>
 
       {/* Debug Panel */}
       <DebugPanel
