@@ -28,7 +28,10 @@ export function DictationProcessor() {
   // Sync transcription to input text
   useEffect(() => {
     if (transcription) {
-      setInputText(transcription);
+      setInputText(prev => {
+        const trimmed = prev.trim();
+        return trimmed ? `${trimmed} ${transcription}` : transcription;
+      });
     }
   }, [transcription]);
 

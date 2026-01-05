@@ -80,16 +80,10 @@ export function useTranscribe(): TranscribeHook {
                         addLog('Transcription completed', 'success', data);
                         setIsTranscribing(false);
                         if (data && typeof data === 'object' && data.text) {
-                            setTranscription(prev => {
-                                const space = prev ? ' ' : '';
-                                return prev + space + data.text.trim();
-                            });
+                            setTranscription(data.text.trim());
                         } else if (Array.isArray(data)) {
                             const text = data.map((chunk: any) => chunk.text).join(' ');
-                            setTranscription(prev => {
-                                const space = prev ? ' ' : '';
-                                return prev + space + text.trim();
-                            });
+                            setTranscription(text.trim());
                         }
                         break;
                     case 'error':
@@ -197,6 +191,7 @@ export function useTranscribe(): TranscribeHook {
     }, [isModelLoaded, addLog]);
 
     const startRecording = useCallback(async () => {
+        setTranscription('');
         setError(null);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
