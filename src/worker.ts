@@ -68,6 +68,7 @@ self.addEventListener('message', async (event: MessageEvent) => {
                 // language: 'english', // Not needed for en-only model
                 task: 'transcribe',
                 return_timestamps: true,
+                chunk_length_s: 30,
             });
 
             console.log('[Worker] Transcription output:', output);

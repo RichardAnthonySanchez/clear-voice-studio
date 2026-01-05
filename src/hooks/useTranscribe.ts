@@ -46,8 +46,14 @@ export function useTranscribe(): TranscribeHook {
     const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
     const workerRef = useRef<Worker | null>(null);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const chunksRef = useRef<Blob[]>([]);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+    const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const scriptNodeRef = useRef<ScriptProcessorNode | null>(null);
+
+    // Buffer to hold audio samples until we have enough to send (approx 4 seconds)
+    const audioBufferRef = useRef<Float32Array>(new Float32Array(0));
+    const CHUNK_DURATION_SEC = 4;
 
     const addLog = useCallback((message: string, type: DebugLog['type'] = 'info', data?: any) => {
         const timestamp = Date.now();
@@ -100,139 +106,154 @@ export function useTranscribe(): TranscribeHook {
         }
 
         return () => {
-            // Cleanup worker on unmount
             workerRef.current?.terminate();
             workerRef.current = null;
         };
     }, [addLog]);
 
-    const normalizeAudio = (audioData: Float32Array): { normalizedData: Float32Array; peak: number; gain: number } => {
-        let peak = 0;
-        let sumSquared = 0;
-
-        for (let i = 0; i < audioData.length; i++) {
-            const abs = Math.abs(audioData[i]);
-            if (abs > peak) peak = abs;
-            sumSquared += audioData[i] * audioData[i];
-        }
-
-        const rms = Math.sqrt(sumSquared / audioData.length);
-
-        const targetLevel = 0.95;
-        let gain = 1.0;
-
-        // Verify we have valid data
-        if (!Number.isFinite(peak) || peak === 0) {
-            addLog('Audio peak is zero or invalid.', 'error');
-            return { normalizedData: audioData, peak, gain };
-        }
-
-        gain = targetLevel / peak;
-        addLog(`Normalizing: Peak=${peak.toFixed(4)}, RMS=${rms.toFixed(4)} -> Gain=${gain.toFixed(2)}x`);
-
-        // Apply gain
-        const normalized = new Float32Array(audioData.length);
-        for (let i = 0; i < audioData.length; i++) {
-            normalized[i] = audioData[i] * gain;
-        }
-        return { normalizedData: normalized, peak, gain };
-    };
-
-    const processAudio = useCallback(async (blob: Blob) => {
+    const normalizeAndSendAudio = useCallback(async (audioData: Float32Array) => {
         if (!workerRef.current || !isModelLoaded) {
             addLog('Cannot process: Worker not ready', 'error');
             return;
         }
 
-        addLog(`Processing blob: ${blob.size} bytes, ${blob.type}`);
-        setIsTranscribing(true);
+        // Resample/Decimate to 16kHz if necessary
+        // Since AudioContext typically runs at 44.1/48kHz, we need to convert.
+        // We can do a quick offline render to do high quality resampling.
 
         try {
-            // Force 16kHz sample rate for Whisper
-            const audioContext = new AudioContext({ sampleRate: 16000 });
-            const arrayBuffer = await blob.arrayBuffer();
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const targetSampleRate = 16000;
+            const estimatedDuration = audioData.length / (audioContextRef.current?.sampleRate || 48000);
 
-            addLog(`Decoded: ${audioBuffer.duration.toFixed(2)}s @ ${audioBuffer.sampleRate}Hz, ${audioBuffer.numberOfChannels}ch`);
+            // Create offline context to resample
+            const offlineCtx = new OfflineAudioContext(1, Math.ceil(estimatedDuration * targetSampleRate), targetSampleRate);
+            const buffer = offlineCtx.createBuffer(1, audioData.length, audioContextRef.current?.sampleRate || 48000);
+            buffer.copyToChannel(audioData, 0);
 
-            if (audioBuffer.sampleRate !== 16000) {
-                addLog(`Warning: Sample rate is ${audioBuffer.sampleRate}Hz, expected 16000Hz. This might fail.`, 'error');
+            const source = offlineCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(offlineCtx.destination);
+            source.start();
+
+            const resampledBuffer = await offlineCtx.startRendering();
+            const resampledData = resampledBuffer.getChannelData(0);
+
+            // Normalization
+            let peak = 0;
+            for (let i = 0; i < resampledData.length; i++) {
+                const abs = Math.abs(resampledData[i]);
+                if (abs > peak) peak = abs;
             }
 
-            const rawData = audioBuffer.getChannelData(0);
+            let gain = 1.0;
+            if (peak > 0) {
+                gain = 0.95 / peak;
+            }
 
-            // Update stats
-            setAudioStats({
-                sampleRate: audioBuffer.sampleRate,
-                channelCount: audioBuffer.numberOfChannels,
-                duration: audioBuffer.duration,
-            });
+            const normalized = new Float32Array(resampledData.length);
+            for (let i = 0; i < resampledData.length; i++) {
+                normalized[i] = resampledData[i] * gain;
+            }
 
-            // Normalize
-            const { normalizedData, peak, gain } = normalizeAudio(rawData);
-            setAudioStats(prev => prev ? { ...prev, peak, gainApplied: gain } : null);
-
-            addLog(`Sending ${normalizedData.length} samples to worker`, 'info');
+            setIsTranscribing(true);
+            addLog(`Sending chunk to worker: ${normalized.length} samples (${(normalized.length / 16000).toFixed(2)}s)`);
 
             workerRef.current.postMessage({
                 type: 'transcribe',
-                audio: normalizedData,
+                audio: normalized,
                 language: 'english'
             });
 
-            audioContext.close();
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            addLog('Audio processing failed', 'error', msg);
-            console.error('Error processing audio:', err);
-            setError('Failed to process audio data');
-            setIsTranscribing(false);
+            console.error('Resampling/Sending error:', err);
+            addLog('Error preparing audio chunk', 'error', err);
         }
+
     }, [isModelLoaded, addLog]);
 
     const startRecording = useCallback(async () => {
         setTranscription('');
         setError(null);
+        audioBufferRef.current = new Float32Array(0); // Clear buffer
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            setAudioStream(stream); // Expose stream for visualization
-            addLog('Microphone access granted', 'success');
+            mediaStreamRef.current = stream;
+            setAudioStream(stream);
 
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            chunksRef.current = [];
+            // Setup AudioContext
+            // We use standard context, usually 44.1k or 48k
+            const context = new AudioContext();
+            audioContextRef.current = context;
 
-            mediaRecorderRef.current.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    chunksRef.current.push(e.data);
+            const source = context.createMediaStreamSource(stream);
+            sourceRef.current = source;
+
+            // ScriptNode for processing
+            // bufferSize 4096 => ~85ms latency at 48k
+            const scriptNode = context.createScriptProcessor(4096, 1, 1);
+            scriptNodeRef.current = scriptNode;
+
+            scriptNode.onaudioprocess = (audioProcessingEvent) => {
+                const inputBuffer = audioProcessingEvent.inputBuffer;
+                const inputData = inputBuffer.getChannelData(0);
+
+                // Append to buffer
+                const newBuffer = new Float32Array(audioBufferRef.current.length + inputData.length);
+                newBuffer.set(audioBufferRef.current);
+                newBuffer.set(inputData, audioBufferRef.current.length);
+                audioBufferRef.current = newBuffer;
+
+                // Check if buffer is large enough for a chunk
+                // sampleRate * CHUNK_DURATION
+                const threshold = context.sampleRate * CHUNK_DURATION_SEC;
+                if (audioBufferRef.current.length >= threshold) {
+                    const chunkToSend = audioBufferRef.current;
+                    audioBufferRef.current = new Float32Array(0); // Reset buffer
+                    normalizeAndSendAudio(chunkToSend);
                 }
             };
 
-            mediaRecorderRef.current.onstop = () => {
-                addLog('Recording stopped. Finalizing Blob...', 'info');
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-                processAudio(blob);
+            source.connect(scriptNode);
+            scriptNode.connect(context.destination); // Needed for Chrome to fire events
 
-                // Stop tracks
-                stream.getTracks().forEach(track => track.stop());
-                setAudioStream(null);
-            };
-
-            mediaRecorderRef.current.start();
+            addLog('Microphone access granted & streaming started', 'success');
             setIsRecording(true);
-            addLog('MediaRecorder started', 'info');
+
         } catch (err) {
             console.error('Error accessing microphone:', err);
             setError('Could not access microphone');
             addLog('Microphone access failed', 'error', err);
         }
-    }, [processAudio, addLog]);
+    }, [normalizeAndSendAudio, addLog]);
 
     const stopRecording = useCallback(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
+        if (mediaStreamRef.current) {
+            // Process remaining buffer
+            if (audioBufferRef.current.length > 0) {
+                addLog('Flushing remaining audio buffer...', 'info');
+                normalizeAndSendAudio(audioBufferRef.current);
+                audioBufferRef.current = new Float32Array(0);
+            }
+
+            // Stop tracks
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+            setAudioStream(null);
+
+            // Cleanup audio nodes
+            scriptNodeRef.current?.disconnect();
+            sourceRef.current?.disconnect();
+            audioContextRef.current?.close();
+
+            scriptNodeRef.current = null;
+            sourceRef.current = null;
+            audioContextRef.current = null;
+
             setIsRecording(false);
+            addLog('Recording stopped', 'info');
         }
-    }, []);
+    }, [normalizeAndSendAudio, addLog]);
 
     const resetTranscription = useCallback(() => {
         setTranscription('');
