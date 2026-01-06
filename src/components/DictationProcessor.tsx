@@ -72,14 +72,14 @@ export function DictationProcessor() {
       <div className="space-y-3 relative">
         <div className="flex justify-between items-center pl-1 h-6">
           <label className="text-sm font-medium text-foreground/80">Transcription</label>
-          {isRecording && (
-            <div className="absolute right-0 top-0 flex items-center">
+          <div className="flex items-center gap-4">
+            {isRecording && (
               <AudioVisualizer stream={audioStream} isRecording={isRecording} width={100} height={30} />
-            </div>
-          )}
-          {isTranscribing && (
-            <span className="text-xs text-primary animate-pulse">Transcribing...</span>
-          )}
+            )}
+            {isTranscribing && (
+              <span className="text-xs text-primary animate-pulse font-medium">Transcribing...</span>
+            )}
+          </div>
         </div>
         <DictationInput
           value={inputText}
