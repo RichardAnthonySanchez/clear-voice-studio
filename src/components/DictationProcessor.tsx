@@ -29,8 +29,11 @@ export function DictationProcessor() {
   useEffect(() => {
     if (transcription) {
       setInputText(prev => {
-        const trimmed = prev.trim();
-        return trimmed ? `${trimmed} ${transcription}` : transcription;
+        if (!prev) return transcription;
+        // Check if the current text ends with whitespace (space, newline, etc.)
+        const endsWithWhitespace = /\s$/.test(prev);
+        // If it ends with whitespace, append directly. Otherwise, add a space.
+        return endsWithWhitespace ? `${prev}${transcription}` : `${prev} ${transcription}`;
       });
     }
   }, [transcription]);
